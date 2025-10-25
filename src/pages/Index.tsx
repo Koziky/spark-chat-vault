@@ -1,6 +1,4 @@
 import { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { Sidebar } from "@/components/Sidebar";
@@ -14,71 +12,47 @@ interface Message {
   image_url?: string | null;
 }
 
+interface Conversation {
+  id: string;
+  title: string;
+  messages: Message[];
+  updated_at: string;
+}
+
 const Index = () => {
-  const navigate = useNavigate();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    checkAuth();
+    loadConversations();
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const checkAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      navigate("/auth");
-      return;
+  const loadConversations = () => {
+    const stored = localStorage.getItem('grok-conversations');
+    if (stored) {
+      setConversations(JSON.parse(stored));
     }
-    setLoading(false);
   };
 
-  const createNewConversation = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    const { data, error } = await supabase
-      .from("conversations")
-      .insert({ user_id: user.id, title: "New Chat" })
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Error creating conversation:", error);
-      return null;
-    }
-
-    return data.id;
+  const saveConversations = (convs: Conversation[]) => {
+    localStorage.setItem('grok-conversations', JSON.stringify(convs));
+    setConversations(convs);
   };
 
-  const loadConversation = async (conversationId: string) => {
-    const { data, error } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      console.error("Error loading messages:", error);
-      return;
+  const loadConversation = (conversationId: string) => {
+    const conv = conversations.find(c => c.id === conversationId);
+    if (conv) {
+      setMessages(conv.messages);
+      setCurrentConversationId(conversationId);
     }
-
-    const typedMessages: Message[] = (data || []).map((msg) => ({
-      id: msg.id,
-      role: msg.role as "user" | "assistant",
-      content: msg.content,
-      image_url: msg.image_url,
-    }));
-
-    setMessages(typedMessages);
-    setCurrentConversationId(conversationId);
   };
 
   const handleNewChat = () => {
@@ -86,13 +60,20 @@ const Index = () => {
     setCurrentConversationId(null);
   };
 
+  const handleDeleteConversation = (id: string) => {
+    const updated = conversations.filter(c => c.id !== id);
+    saveConversations(updated);
+    if (currentConversationId === id) {
+      handleNewChat();
+    }
+  };
+
   const handleSendMessage = async (content: string, imageUrl?: string) => {
     if (!content.trim()) return;
 
     let conversationId = currentConversationId;
     if (!conversationId) {
-      conversationId = await createNewConversation();
-      if (!conversationId) return;
+      conversationId = crypto.randomUUID();
       setCurrentConversationId(conversationId);
     }
 
@@ -103,29 +84,13 @@ const Index = () => {
       image_url: imageUrl,
     };
 
-    setMessages((prev) => [...prev, userMessage]);
-
-    const { error } = await supabase.from("messages").insert({
-      conversation_id: conversationId,
-      role: "user",
-      content,
-      image_url: imageUrl,
-    });
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to save message",
-        variant: "destructive",
-      });
-      return;
-    }
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
 
     setIsStreaming(true);
 
     try {
-      const allMessages = [...messages, userMessage];
-      const apiMessages = allMessages.map((msg) => {
+      const apiMessages = updatedMessages.map((msg) => {
         const message: any = {
           role: msg.role,
           content: msg.content,
@@ -204,19 +169,29 @@ const Index = () => {
         }
       }
 
-      await supabase.from("messages").insert({
-        conversation_id: conversationId,
-        role: "assistant",
-        content: assistantMessage,
-      });
+      // Save conversation to localStorage
+      const finalMessages = [
+        ...updatedMessages,
+        { id: assistantMessageId, role: "assistant" as const, content: assistantMessage }
+      ];
 
-      if (messages.length === 0) {
-        const title = content.slice(0, 50);
-        await supabase
-          .from("conversations")
-          .update({ title })
-          .eq("id", conversationId);
-      }
+      const existingConvIndex = conversations.findIndex(c => c.id === conversationId);
+      const title = updatedMessages.length === 1 ? content.slice(0, 50) : 
+        (existingConvIndex >= 0 ? conversations[existingConvIndex].title : "New Chat");
+
+      const updatedConv: Conversation = {
+        id: conversationId,
+        title,
+        messages: finalMessages,
+        updated_at: new Date().toISOString(),
+      };
+
+      const updatedConversations = existingConvIndex >= 0
+        ? conversations.map((c, i) => i === existingConvIndex ? updatedConv : c)
+        : [updatedConv, ...conversations];
+
+      saveConversations(updatedConversations);
+
     } catch (error: any) {
       toast({
         title: "Error",
@@ -228,20 +203,14 @@ const Index = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar
+        conversations={conversations}
         currentConversationId={currentConversationId}
         onSelectConversation={loadConversation}
         onNewChat={handleNewChat}
+        onDeleteConversation={handleDeleteConversation}
       />
       <div className="flex-1 flex flex-col">
         <div className="flex-1 overflow-y-auto p-4 space-y-4">

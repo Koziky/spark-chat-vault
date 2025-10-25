@@ -2,7 +2,6 @@ import { useState, useRef, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, Image as ImageIcon, X } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 interface ChatInputProps {
@@ -43,32 +42,32 @@ export const ChatInput = ({ onSendMessage, disabled }: ChatInputProps) => {
 
     setUploading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const fileExt = selectedImage.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-
-      const { data, error } = await supabase.storage
-        .from('chat-images')
-        .upload(fileName, selectedImage);
-
-      if (error) throw error;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('chat-images')
-        .getPublicUrl(data.path);
-
-      return publicUrl;
+      // Convert image to base64 data URL for local storage
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setUploading(false);
+          resolve(reader.result as string);
+        };
+        reader.onerror = () => {
+          setUploading(false);
+          toast({
+            title: "Upload failed",
+            description: "Failed to process image",
+            variant: "destructive",
+          });
+          resolve(null);
+        };
+        reader.readAsDataURL(selectedImage);
+      });
     } catch (error: any) {
       toast({
         title: "Upload failed",
         description: error.message,
         variant: "destructive",
       });
-      return null;
-    } finally {
       setUploading(false);
+      return null;
     }
   };
 
