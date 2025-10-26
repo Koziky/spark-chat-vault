@@ -117,7 +117,7 @@ const Index = () => {
       );
 
       if (!response.ok) {
-        throw new Error("Failed to get response from Grok");
+        throw new Error("Failed to get response from AI");
       }
 
       const reader = response.body?.getReader();
@@ -223,7 +223,7 @@ const Index = () => {
               </div>
               <div className="space-y-2">
                 <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                  Welcome to Grok AI
+                  Welcome to AI Chat
                 </h2>
                 <p className="text-muted-foreground max-w-md">
                   Start a conversation by typing a message below. You can also upload images for visual understanding.

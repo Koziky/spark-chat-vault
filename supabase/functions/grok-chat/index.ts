@@ -13,33 +13,47 @@ serve(async (req) => {
 
   try {
     const { messages } = await req.json();
-    const GROK_API_KEY = Deno.env.get('GROK_API_KEY');
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
-    if (!GROK_API_KEY) {
-      throw new Error('GROK_API_KEY is not configured');
+    if (!LOVABLE_API_KEY) {
+      throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    console.log('Calling Grok API with', messages.length, 'messages');
+    console.log('Calling Lovable AI with', messages.length, 'messages');
 
-    const response = await fetch('https://api.x.ai/v1/chat/completions', {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${GROK_API_KEY}`,
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'grok-2-latest',
-        messages: messages,
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: 'You are a helpful AI assistant. Keep answers clear and concise.' },
+          ...messages
+        ],
         stream: true,
-        temperature: 0.7,
       }),
     });
 
     if (!response.ok) {
+      if (response.status === 429) {
+        return new Response(JSON.stringify({ error: 'Rate limits exceeded, please try again later.' }), {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ error: 'Payment required, please add funds to your workspace.' }), {
+          status: 402,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       const errorText = await response.text();
-      console.error('Grok API error:', response.status, errorText);
+      console.error('AI API error:', response.status, errorText);
       return new Response(
-        JSON.stringify({ error: `Grok API error: ${response.status}` }),
+        JSON.stringify({ error: `AI API error: ${response.status}` }),
         {
           status: response.status,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
