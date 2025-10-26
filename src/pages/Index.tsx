@@ -68,6 +68,24 @@ const Index = () => {
     }
   };
 
+  const handleRenameConversation = (id: string, newTitle: string) => {
+    const updated = conversations.map(c => 
+      c.id === id ? { ...c, title: newTitle } : c
+    );
+    saveConversations(updated);
+  };
+
+  const handleClearAll = () => {
+    if (confirm('Are you sure you want to delete all conversations?')) {
+      saveConversations([]);
+      handleNewChat();
+      toast({
+        title: "Cleared",
+        description: "All conversations deleted",
+      });
+    }
+  };
+
   const handleSendMessage = async (content: string, imageUrl?: string) => {
     if (!content.trim()) return;
 
@@ -211,6 +229,8 @@ const Index = () => {
         onSelectConversation={loadConversation}
         onNewChat={handleNewChat}
         onDeleteConversation={handleDeleteConversation}
+        onRenameConversation={handleRenameConversation}
+        onClearAll={handleClearAll}
       />
       <div className="flex-1 flex flex-col">
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -223,7 +243,7 @@ const Index = () => {
               </div>
               <div className="space-y-2">
                 <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                  Welcome to AI Chat
+                  Welcome to Koziky AI
                 </h2>
                 <p className="text-muted-foreground max-w-md">
                   Start a conversation by typing a message below. You can also upload images for visual understanding.
