@@ -1,8 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Bot, User, Copy, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { Highlight, themes } from "prism-react-renderer";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -62,11 +61,11 @@ export const ChatMessage = ({ role, content, imageUrl }: ChatMessageProps) => {
                   const isInline = !className;
                   
                   return !isInline && match ? (
-                    <div className="relative group">
+                    <div className="relative group my-2">
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="absolute right-2 top-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-background"
+                        className="absolute right-2 top-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-background z-10"
                         onClick={() => handleCopy(codeString, language)}
                       >
                         {copiedCode === language ? (
@@ -75,14 +74,26 @@ export const ChatMessage = ({ role, content, imageUrl }: ChatMessageProps) => {
                           <Copy className="h-4 w-4" />
                         )}
                       </Button>
-                      <SyntaxHighlighter
-                        style={oneDark}
-                        language={language}
-                        PreTag="div"
-                        customStyle={{ marginTop: 0 }}
+                      <Highlight
+                        theme={themes.oneDark}
+                        code={codeString}
+                        language={language as any}
                       >
-                        {codeString}
-                      </SyntaxHighlighter>
+                        {({ className: highlightClassName, style, tokens, getLineProps, getTokenProps }) => (
+                          <pre
+                            className={cn(highlightClassName, "rounded-lg p-4 overflow-x-auto")}
+                            style={style}
+                          >
+                            {tokens.map((line, i) => (
+                              <div key={i} {...getLineProps({ line })}>
+                                {line.map((token, key) => (
+                                  <span key={key} {...getTokenProps({ token })} />
+                                ))}
+                              </div>
+                            ))}
+                          </pre>
+                        )}
+                      </Highlight>
                     </div>
                   ) : (
                     <code {...rest} className={cn("bg-muted px-1 py-0.5 rounded", className)}>
