@@ -3,7 +3,8 @@ import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { Sidebar } from "@/components/Sidebar";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Message {
   id: string;
@@ -25,6 +26,7 @@ const Index = () => {
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -221,6 +223,89 @@ const Index = () => {
     }
   };
 
+  const handleGenerateImage = async (prompt: string) => {
+    if (!prompt.trim()) return;
+
+    setIsGeneratingImage(true);
+
+    let conversationId = currentConversationId;
+    if (!conversationId) {
+      conversationId = crypto.randomUUID();
+      setCurrentConversationId(conversationId);
+    }
+
+    const userMessage: Message = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: `Generate an image: ${prompt}`,
+    };
+
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/grok-chat`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ 
+            messages: [{ role: "user", content: prompt }],
+            generateImage: true 
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to generate image");
+      }
+
+      const data = await response.json();
+      const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+
+      if (imageUrl) {
+        const assistantMessage: Message = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: "Here's your generated image:",
+          image_url: imageUrl,
+        };
+
+        const finalMessages = [...updatedMessages, assistantMessage];
+        setMessages(finalMessages);
+
+        // Save conversation
+        const existingConvIndex = conversations.findIndex(c => c.id === conversationId);
+        const title = updatedMessages.length === 1 ? `Image: ${prompt.slice(0, 40)}` : 
+          (existingConvIndex >= 0 ? conversations[existingConvIndex].title : "New Chat");
+
+        const updatedConv: Conversation = {
+          id: conversationId,
+          title,
+          messages: finalMessages,
+          updated_at: new Date().toISOString(),
+        };
+
+        const updatedConversations = existingConvIndex >= 0
+          ? conversations.map((c, i) => i === existingConvIndex ? updatedConv : c)
+          : [updatedConv, ...conversations];
+
+        saveConversations(updatedConversations);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden relative">
       {/* Animated background */}
@@ -239,22 +324,34 @@ const Index = () => {
         onRenameConversation={handleRenameConversation}
         onClearAll={handleClearAll}
       />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col bg-background">
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-primary to-accent">
-                <svg className="w-16 h-16 text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                </svg>
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-6 max-w-3xl mx-auto">
+              <div className="p-6 rounded-3xl bg-gradient-to-br from-primary/20 to-accent/20 backdrop-blur-sm">
+                <Sparkles className="w-20 h-20 text-primary" />
               </div>
-              <div className="space-y-2">
-                <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              <div className="space-y-3">
+                <h2 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                   Welcome to Koziky AI
                 </h2>
-                <p className="text-muted-foreground max-w-md">
-                  Start a conversation by typing a message below. You can also upload images for visual understanding.
+                <p className="text-muted-foreground max-w-md text-lg">
+                  Start a conversation or generate images with AI
                 </p>
+              </div>
+              <div className="flex gap-3 flex-wrap justify-center">
+                <Button
+                  onClick={() => {
+                    const prompt = window.prompt("Enter image description:");
+                    if (prompt) handleGenerateImage(prompt);
+                  }}
+                  variant="outline"
+                  className="gap-2"
+                  disabled={isGeneratingImage}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Generate Image
+                </Button>
               </div>
             </div>
           ) : (
@@ -267,19 +364,25 @@ const Index = () => {
               />
             ))
           )}
-          {isStreaming && messages[messages.length - 1]?.role !== "assistant" && (
+          {(isStreaming || isGeneratingImage) && messages[messages.length - 1]?.role !== "assistant" && (
             <div className="flex gap-3">
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                 <Loader2 className="w-5 h-5 text-primary-foreground animate-spin" />
               </div>
               <div className="bg-muted rounded-2xl px-4 py-3">
-                <p className="text-sm text-muted-foreground">Thinking...</p>
+                <p className="text-sm text-muted-foreground">
+                  {isGeneratingImage ? "Generating image..." : "Thinking..."}
+                </p>
               </div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
-        <ChatInput onSendMessage={handleSendMessage} disabled={isStreaming} />
+        <ChatInput 
+          onSendMessage={handleSendMessage} 
+          disabled={isStreaming || isGeneratingImage}
+          onGenerateImage={handleGenerateImage}
+        />
       </div>
     </div>
   );

@@ -1,15 +1,16 @@
 import { useState, useRef, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Image as ImageIcon, X } from "lucide-react";
+import { Send, Image as ImageIcon, X, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ChatInputProps {
   onSendMessage: (message: string, imageUrl?: string) => void;
   disabled: boolean;
+  onGenerateImage?: (prompt: string) => void;
 }
 
-export const ChatInput = ({ onSendMessage, disabled }: ChatInputProps) => {
+export const ChatInput = ({ onSendMessage, disabled, onGenerateImage }: ChatInputProps) => {
   const [message, setMessage] = useState("");
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -94,7 +95,7 @@ export const ChatInput = ({ onSendMessage, disabled }: ChatInputProps) => {
   };
 
   return (
-    <div className="border-t bg-background p-4">
+    <div className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4">
       {imagePreview && (
         <div className="mb-2 relative inline-block">
           <img src={imagePreview} alt="Preview" className="h-20 rounded-lg" />
@@ -128,6 +129,21 @@ export const ChatInput = ({ onSendMessage, disabled }: ChatInputProps) => {
         >
           <ImageIcon className="h-5 w-5" />
         </Button>
+        {onGenerateImage && (
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => {
+              const prompt = window.prompt("Enter image description:");
+              if (prompt) onGenerateImage(prompt);
+            }}
+            disabled={disabled}
+            className="h-[60px] w-[60px]"
+            title="Generate AI Image"
+          >
+            <Sparkles className="h-5 w-5" />
+          </Button>
+        )}
         <Textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
