@@ -124,6 +124,7 @@ export const ChatInput = ({ onSendMessage, disabled }: ChatInputProps) => {
           variant="outline"
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled || uploading}
+          className="h-[60px] w-[60px]"
         >
           <ImageIcon className="h-5 w-5" />
         </Button>
@@ -138,7 +139,7 @@ export const ChatInput = ({ onSendMessage, disabled }: ChatInputProps) => {
         <Button
           onClick={handleSend}
           disabled={(!message.trim() && !selectedImage) || disabled || uploading}
-          className="bg-gradient-to-r from-primary to-accent hover:opacity-90 transition-opacity"
+          className="bg-gradient-to-r from-primary to-accent hover:opacity-90 transition-opacity h-[60px] w-[60px]"
         >
           <Send className="h-5 w-5" />
         </Button>
